@@ -1,16 +1,66 @@
 # fipi_client
 
-A new Flutter project.
+Flutter Android client for working with FIPI question data.
 
-## Getting Started
+Maintained by `nkstr.ru`.
 
-This project is a starting point for a Flutter application.
+## Requirements
 
-A few resources to get you started if this is your first Flutter project:
+- Flutter `3.35.7`
+- Dart `3.9.2`
+- Java `17`
+- Android SDK
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Local Development
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Install dependencies:
+
+```bash
+flutter pub get
+```
+
+Run static analysis:
+
+```bash
+flutter analyze
+```
+
+Run tests:
+
+```bash
+flutter test
+```
+
+## Android Release Signing
+
+Android release builds require these local files:
+
+- `android/key.properties`
+- `android/app/release.jks`
+
+Both files are intentionally ignored by git and must not be committed.
+
+`android/key.properties` uses this format:
+
+```properties
+storePassword=...
+keyPassword=...
+keyAlias=fipi_client_release
+storeFile=app/release.jks
+```
+
+## CI And Releases
+
+GitHub Actions runs CI on pull requests and pushes to `main`.
+
+Tagged releases are created from Git tags matching `v*`, for example `v1.2.3`.
+
+Nightly prereleases are created from `main` and named as:
+
+```text
+fipi_client.YYYY-MM-DD.<shortsha>
+```
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

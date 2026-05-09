@@ -1,0 +1,85 @@
+name: Nightly
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android-nightly-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.7"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Prepare release signing
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+        run: |
+          mkdir -p android/app
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_RELEASE_STORE_PASSWORD
+          keyPassword=$ANDROID_RELEASE_KEY_PASSWORD
+          keyAlias=$ANDROID_RELEASE_KEY_ALIAS
+          storeFile=app/release.jks
+          EOF
+
+      - name: Compute nightly name
+        run: |
+          DATE_UTC="$(date -u +%F)"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          NIGHTLY_NAME="fipi_client.${DATE_UTC}.${SHORT_SHA}"
+          echo "NIGHTLY_NAME=$NIGHTLY_NAME" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        run: flutter build apk --release --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk "$NIGHTLY_NAME.apk"
+
+      - name: Create or update nightly prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$NIGHTLY_NAME" >/dev/null 2>&1; then
+            git tag "$NIGHTLY_NAME" "$GITHUB_SHA"
+            git push origin "$NIGHTLY_NAME"
+          fi
+
+          if gh release view "$NIGHTLY_NAME" >/dev/null 2>&1; then
+            gh release upload "$NIGHTLY_NAME" "$NIGHTLY_NAME.apk" --clobber
+            gh release edit "$NIGHTLY_NAME" \
+              --title "$NIGHTLY_NAME" \
+              --prerelease
+          else
+            gh release create "$NIGHTLY_NAME" \
+              "$NIGHTLY_NAME.apk" \
+              --title "$NIGHTLY_NAME" \
+              --notes "" \
+              --prerelease
+          fi
