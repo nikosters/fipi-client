@@ -43,27 +43,67 @@ class FilterScreen extends ConsumerWidget {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    ...topicData.map(
-                      (node) => _TopicTile(node: node, allTopics: topicData),
+                    ExpansionTile(
+                      title: const Text('Темы'),
+                      children: topicData
+                          .map(
+                            (node) =>
+                                _TopicTile(node: node, allTopics: topicData),
+                          )
+                          .toList(),
                     ),
-                    const Divider(height: 32),
-                    ...kindData.map(
-                      (kind) => CheckboxListTile(
-                        value: filter.answerKinds.contains(kind.kind),
-                        title: Text(kind.title),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        onChanged: (_) => ref
-                            .read(selectionProvider(subjectId).notifier)
-                            .toggleKind(kind.kind),
-                      ),
+                    ExpansionTile(
+                      title: const Text('Тип ответа'),
+                      children: kindData
+                          .map(
+                            (kind) => CheckboxListTile(
+                              value: filter.answerKinds.contains(kind.kind),
+                              title: Text(kind.title),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              onChanged: (_) => ref
+                                  .read(selectionProvider(subjectId).notifier)
+                                  .toggleKind(kind.kind),
+                            ),
+                          )
+                          .toList(),
                     ),
-                    const Divider(height: 32),
-                    SwitchListTile(
-                      value: filter.showSolved,
-                      title: const Text('Показывать решённые'),
-                      onChanged: (value) => ref
-                          .read(selectionProvider(subjectId).notifier)
-                          .setShowSolved(value),
+                    ExpansionTile(
+                      title: const Text('Параметры'),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: DropdownButtonFormField<int>(
+                            initialValue: filter.questionCount,
+                            decoration: const InputDecoration(
+                              labelText: 'Количество вопросов',
+                            ),
+                            items: const [5, 10, 15, 20, 30, 50]
+                                .map(
+                                  (count) => DropdownMenuItem(
+                                    value: count,
+                                    child: Text('$count'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              ref
+                                  .read(selectionProvider(subjectId).notifier)
+                                  .setQuestionCount(value);
+                            },
+                          ),
+                        ),
+                        SwitchListTile(
+                          value: filter.showSolved,
+                          title: const Text('Показывать решённые'),
+                          onChanged: (value) => ref
+                              .read(selectionProvider(subjectId).notifier)
+                              .setShowSolved(value),
+                        ),
+                      ],
                     ),
                   ],
                 ),

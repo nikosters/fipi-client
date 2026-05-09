@@ -93,6 +93,9 @@ class SelectionController extends StateNotifier<QuestionFilter> {
 
   Future<void> setShowSolved(bool value) =>
       setFilter(state.copyWith(showSolved: value));
+
+  Future<void> setQuestionCount(int value) =>
+      setFilter(state.copyWith(questionCount: value));
 }
 
 class QuestionPageRequest {
@@ -130,12 +133,14 @@ final questionPageProvider =
         subjectId: request.subjectId,
         filter: filter,
         page: request.page,
+        pageSize: filter.questionCount,
       );
       if (page.questions.isEmpty && request.page != 0) {
         page = await repository.loadQuestions(
           subjectId: request.subjectId,
           filter: filter,
           page: 0,
+          pageSize: filter.questionCount,
         );
       }
       final questions = [...page.questions]..shuffle(Random(request.seed));

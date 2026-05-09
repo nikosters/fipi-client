@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../data/answer_form_fields.dart';
 import '../data/fipi_question_html_builder.dart';
 import '../data/providers.dart';
 import '../domain/question_models.dart';
@@ -87,12 +88,22 @@ class _QuestionSessionScreenState extends ConsumerState<QuestionSessionScreen> {
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => _next(data.questions.length),
-                        child: const Text('Пропустить'),
-                      ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _next(data.questions.length),
+                            child: const Text('Пропустить'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _forceCheck,
+                            child: const Text('Проверить'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -121,6 +132,12 @@ class _QuestionSessionScreenState extends ConsumerState<QuestionSessionScreen> {
       if (page == null || page.questions.isEmpty) return;
       _next(page.questions.length);
     });
+  }
+
+  Future<void> _forceCheck() async {
+    await _controller?.runJavaScript(
+      'window.FipiSendAnswer && window.FipiSendAnswer();',
+    );
   }
 
   WebViewController _controllerFor(QuestionSummary question) {
@@ -198,7 +215,7 @@ class _QuestionSessionScreenState extends ConsumerState<QuestionSessionScreen> {
   Future<void> _check(QuestionSummary question, String payload) async {
     final decoded = jsonDecode(payload);
     if (decoded is! Map) return;
-    final fields = decoded.map((key, value) => MapEntry('$key', '$value'));
+    final fields = flattenAnswerPayload(decoded);
     try {
       final repository = await ref.read(fipiRepositoryProvider.future);
       final result = await repository.checkAnswer(
@@ -206,11 +223,13 @@ class _QuestionSessionScreenState extends ConsumerState<QuestionSessionScreen> {
         questionGuid: question.guid,
         formFields: fields,
       );
-      setState(() => _status = result.status);
+      if (!mounted || _loadedQuestionGuid != question.guid) return;
+      final status = _normalizeStatus(question, result.status);
+      setState(() => _status = _bestStatus(_status, status));
       await _controller?.runJavaScript(
-        const FipiQuestionHtmlBuilder().resultScript(result.status.name),
+        const FipiQuestionHtmlBuilder().resultScript(status.name),
       );
-      if (result.status == QuestionStatus.correct) {
+      if (status == QuestionStatus.correct) {
         _nextAfterCorrect();
       }
       ref.invalidate(questionPageProvider(_request));
@@ -221,6 +240,30 @@ class _QuestionSessionScreenState extends ConsumerState<QuestionSessionScreen> {
         ).showSnackBar(const SnackBar(content: Text('Ошибка проверки')));
       }
     }
+  }
+
+  QuestionStatus _bestStatus(QuestionStatus current, QuestionStatus next) {
+    return _statusRank(next) >= _statusRank(current) ? next : current;
+  }
+
+  QuestionStatus _normalizeStatus(
+    QuestionSummary question,
+    QuestionStatus status,
+  ) {
+    if (question.answerKind == AnswerKind.selectOne &&
+        status == QuestionStatus.solved) {
+      return QuestionStatus.correct;
+    }
+    return status;
+  }
+
+  int _statusRank(QuestionStatus status) {
+    return switch (status) {
+      QuestionStatus.unsolved => 0,
+      QuestionStatus.wrong => 1,
+      QuestionStatus.solved => 2,
+      QuestionStatus.correct => 3,
+    };
   }
 }
 

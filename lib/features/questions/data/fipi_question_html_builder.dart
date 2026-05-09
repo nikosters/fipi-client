@@ -65,7 +65,7 @@ class FipiQuestionHtmlBuilder {
     }
 
     function writeImage(src, attrs) {
-      document.write('<img src="' + escapeFipiAttr(normalizeFipiUrl(src)) + '" ' + (attrs || '') + '>');
+      document.write('<img src="' + escapeFipiAttr(normalizeFipiUrl(src)) + '" style="background:#fff!important;background-color:#fff!important" ' + (attrs || '') + '>');
     }
 
     function ShowPictureQ(s, hint) {
@@ -109,13 +109,20 @@ class FipiQuestionHtmlBuilder {
     button, input[type=button], input[type=submit] { background: #7db7ff !important; color: #07111d !important; border: 1px solid #7db7ff !important; border-radius: 6px; padding: 8px 10px; box-shadow: none !important; }
     table { border-collapse: collapse; width: 100% !important; table-layout: auto; background: #111820 !important; color: #e6edf3 !important; border-color: #263241 !important; }
     td, th { min-width: 0 !important; border-color: #263241 !important; padding: 6px; overflow-wrap: normal; word-break: normal; }
-    p, div, th, .qblock td:not(.fipi-answer-cell) { overflow-wrap: anywhere; }
+    p, div, th, .qblock td:not(.fipi-answer-cell):not(.fipi-choice-marker-cell):not(.fipi-choice-control-cell) { overflow-wrap: anywhere; }
     .fipi-answer-cell { white-space: normal !important; max-width: 100% !important; }
     .fipi-answer-inline { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; max-width: 100%; }
     .fipi-answer-inline input[type="text"], .fipi-answer-inline textarea, .fipi-answer-inline select { width: 100% !important; min-width: 0 !important; }
     .fipi-answer-unit { white-space: nowrap; }
+    .fipi-option-marker, .fipi-choice-marker-cell { white-space: nowrap !important; word-break: keep-all !important; overflow-wrap: normal !important; hyphens: none !important; }
+    .fipi-option-marker { display: inline-block !important; min-width: 1.6em !important; }
+    .fipi-choice-marker-cell { width: 2.2em !important; min-width: 2.2em !important; max-width: 2.2em !important; text-align: center !important; vertical-align: top !important; padding-left: 4px !important; padding-right: 4px !important; }
+    .fipi-choice-marker-cell br, .fipi-option-marker br { display: none !important; }
+    .fipi-choice-control-cell { width: 2.4em !important; min-width: 2.4em !important; max-width: 2.4em !important; vertical-align: top !important; }
+    .fipi-choice-text-cell { width: auto !important; max-width: 100% !important; white-space: normal !important; overflow-wrap: anywhere !important; word-break: normal !important; }
     a { color: #7db7ff !important; }
-    img, svg, canvas { max-width: 100% !important; height: auto !important; }
+    img { max-width: 100% !important; height: auto !important; background: #ffffff !important; background-color: #ffffff !important; }
+    svg, canvas { max-width: 100% !important; height: auto !important; }
     mjx-container { max-width: 100% !important; overflow-x: auto; overflow-y: hidden; }
     table[bgcolor], tr[bgcolor], td[bgcolor] { background: #111820 !important; background-color: #111820 !important; }
     tr[bgcolor="#FFFFFF"], tr[bgcolor="#ffffff"], td[bgcolor="#FFFFFF"], td[bgcolor="#ffffff"] { background: #111820 !important; background-color: #111820 !important; }
@@ -135,10 +142,20 @@ class FipiQuestionHtmlBuilder {
       function collectFields(form) {
         var data = {};
         var fields = form ? form.querySelectorAll('input, select, textarea') : document.querySelectorAll('input, select, textarea');
+        function addField(name, value) {
+          if (!data[name]) data[name] = [];
+          data[name].push(value || '');
+        }
         fields.forEach(function (field) {
           if (!field.name || field.disabled) return;
           if ((field.type === 'checkbox' || field.type === 'radio') && !field.checked) return;
-          data[field.name] = field.value || '';
+          if (field.type === 'select-multiple' || field.multiple) {
+            Array.prototype.slice.call(field.options || []).forEach(function (option) {
+              if (option.selected) addField(field.name, option.value);
+            });
+            return;
+          }
+          addField(field.name, field.value);
         });
         return data;
       }
@@ -146,12 +163,38 @@ class FipiQuestionHtmlBuilder {
         if (!window.AnswerBridge || !window.AnswerBridge.postMessage) return;
         window.AnswerBridge.postMessage(JSON.stringify(collectFields(form)));
       }
+      function formFor(target) {
+        if (!target) return null;
+        if (target.form) return target.form;
+        if (target.closest) return target.closest('form');
+        return null;
+      }
+      function scheduleSend(target) {
+        setTimeout(function () {
+          send(formFor(target));
+        }, 80);
+      }
+      window.FipiSendAnswer = function () {
+        document.querySelectorAll('input:checked, select, textarea, input[type="hidden"], input[type="text"]').forEach(function (field) {
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          field.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        setTimeout(function () {
+          send(null);
+        }, 120);
+      };
       document.addEventListener('submit', function (event) {
         event.preventDefault();
         send(event.target);
       }, true);
       document.addEventListener('change', function (event) {
-        if (event.target && event.target.form) send(event.target.form);
+        scheduleSend(event.target);
+      }, true);
+      document.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!target || !target.matches) return;
+        if (!target.matches('input[type="checkbox"], input[type="radio"], select, option')) return;
+        scheduleSend(target);
       }, true);
       window.FipiAnswerResult = function (status) {
         document.body.setAttribute('data-local-status', status);
@@ -164,6 +207,8 @@ class FipiQuestionHtmlBuilder {
           img.removeAttribute('width');
           img.style.maxWidth = '100%';
           img.style.height = 'auto';
+          img.style.setProperty('background', '#fff', 'important');
+          img.style.setProperty('background-color', '#fff', 'important');
         });
       }
       function reportImages() {
@@ -205,6 +250,85 @@ class FipiQuestionHtmlBuilder {
             node = next;
           }
           if (unit.childNodes.length) wrapper.appendChild(unit);
+        });
+      }
+      function compactOptionMarkerText(value) {
+        var compact = String(value || '').replace(/[ \\t\\r\\n]+/g, '');
+        return /^[0-9]+[)]\$/.test(compact) ? compact : '';
+      }
+      function normalizeOptionMarkerElement(element) {
+        if (!element) return false;
+        if (element.querySelector && element.querySelector('input, select, textarea, img, svg, canvas, table')) {
+          return false;
+        }
+        var marker = compactOptionMarkerText(element.textContent);
+        if (!marker) return false;
+        element.classList.add('fipi-option-marker');
+        element.textContent = marker;
+        return true;
+      }
+      function normalizeOptionNumbers() {
+        document.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(function (input) {
+          var row = input.closest && input.closest('tr');
+          if (!row) return;
+          var cells = Array.prototype.slice.call(row.children || []).filter(function (cell) {
+            var tag = (cell.tagName || '').toLowerCase();
+            return tag === 'td' || tag === 'th';
+          });
+          if (!cells.length) return;
+          var inputCellIndex = cells.findIndex(function (cell) {
+            return cell.contains(input);
+          });
+          if (inputCellIndex < 0) return;
+          var markerCell = null;
+          for (var i = inputCellIndex + 1; i < cells.length; i += 1) {
+            if (normalizeOptionMarkerElement(cells[i])) {
+              markerCell = cells[i];
+              break;
+            }
+          }
+          if (!markerCell) return;
+          row.classList.add('fipi-choice-row');
+          cells[inputCellIndex].classList.add('fipi-choice-control-cell');
+          markerCell.classList.add('fipi-choice-marker-cell');
+          var markerIndex = cells.indexOf(markerCell);
+          if (markerIndex >= 0 && markerIndex + 1 < cells.length) {
+            cells[markerIndex + 1].classList.add('fipi-choice-text-cell');
+          }
+        });
+        document.querySelectorAll('span, div, font, b, strong').forEach(function (element) {
+          normalizeOptionMarkerElement(element);
+        });
+        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        var nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach(function (node) {
+          if (!node.parentNode || node.parentNode.closest && node.parentNode.closest('.fipi-option-marker')) return;
+          if (!/[0-9][ \\t\\r\\n]*[)]/.test(node.nodeValue)) return;
+          var fragment = document.createDocumentFragment();
+          var parts = node.nodeValue.split(/([0-9]+[ \\t\\r\\n]*[)])/g);
+          parts.forEach(function (part) {
+            if (!part) return;
+            if (/^[0-9]+[ \\t\\r\\n]*[)]\$/.test(part)) {
+              var span = document.createElement('span');
+              span.className = 'fipi-option-marker';
+              span.textContent = part.replace(/[ \\t\\r\\n]+/g, '');
+              fragment.appendChild(span);
+            } else {
+              fragment.appendChild(document.createTextNode(part));
+            }
+          });
+          node.parentNode.replaceChild(fragment, node);
+        });
+        document.querySelectorAll('span, div, font, b, strong').forEach(function (node) {
+          if (node.childNodes.length !== 1) return;
+          var text = node.textContent || '';
+          if (!/^[ \\t\\r\\n]*[0-9]+[ \\t\\r\\n]*\$/.test(text)) return;
+          var next = node.nextSibling;
+          while (next && next.nodeType === 3 && next.nodeValue.trim() === '') next = next.nextSibling;
+          if (!next || next.nodeType !== 3 || !/^[ \\t\\r\\n]*[)]/.test(next.nodeValue)) return;
+          node.classList.add('fipi-option-marker');
+          next.nodeValue = next.nodeValue.replace(/^[ \\t\\r\\n]*[)]/, ')');
         });
       }
       function normalizeMathMl() {
@@ -257,6 +381,7 @@ class FipiQuestionHtmlBuilder {
       }
       normalizeImages();
       normalizeAnswerCells();
+      normalizeOptionNumbers();
       normalizeMathMl();
       setTimeout(normalizeImages, 0);
       setTimeout(normalizeImages, 300);
@@ -265,6 +390,9 @@ class FipiQuestionHtmlBuilder {
       setTimeout(reportImages, 1500);
       setTimeout(normalizeAnswerCells, 0);
       setTimeout(normalizeAnswerCells, 300);
+      setTimeout(normalizeOptionNumbers, 0);
+      setTimeout(normalizeOptionNumbers, 300);
+      setTimeout(normalizeOptionNumbers, 1000);
       setTimeout(normalizeMathMl, 0);
       setTimeout(normalizeMathMl, 300);
       setTimeout(typesetMath, 0);
@@ -288,7 +416,7 @@ class FipiQuestionHtmlBuilder {
         final images = _pictureCalls(script)
             .map(
               (call) =>
-                  '<img src="${_escapeHtmlAttribute(_pictureUrl(call.functionName, call.path))}" align="absmiddle" alt="${_escapeHtmlAttribute(call.hint)}">',
+                  '<img src="${_escapeHtmlAttribute(_pictureUrl(call.functionName, call.path))}" align="absmiddle" alt="${_escapeHtmlAttribute(call.hint)}" style="${_escapeHtmlAttribute(_imageBackingStyle())}">',
             )
             .join();
         return images.isEmpty ? match.group(0)! : images;
@@ -313,46 +441,47 @@ class FipiQuestionHtmlBuilder {
   }
 
   String _normalizeImageTags(String html) {
-    return html.replaceAllMapped(
-      RegExp(r'''<img\b([^>]*)>''', caseSensitive: false),
-      (match) {
-        final attributes = match.group(1) ?? '';
-        final parsed = _parseAttributes(attributes);
-        final source = parsed['src'];
-        final sourceValue = source?.value;
-        if (sourceValue == null || sourceValue.trim().isEmpty) {
-          return match.group(0)!;
+    return html.replaceAllMapped(RegExp(r'''<img\b([^>]*)>''', caseSensitive: false), (
+      match,
+    ) {
+      final attributes = match.group(1) ?? '';
+      final parsed = _parseAttributes(attributes);
+      final source = parsed['src'];
+      final sourceValue = source?.value;
+      if (sourceValue == null || sourceValue.trim().isEmpty) {
+        return match.group(0)!;
+      }
+      final parts = <String>[];
+      var hasStyle = false;
+      for (final entry in parsed.entries) {
+        final name = entry.key;
+        final attribute = entry.value;
+        if (name == 'src') {
+          parts.add(
+            'src="${_escapeHtmlAttribute(_pictureUrl('ShowPictureQ', sourceValue))}"',
+          );
+        } else if (name == 'width' || name == 'height') {
+          continue;
+        } else if (name == 'style') {
+          hasStyle = true;
+          parts.add(
+            'style="${_escapeHtmlAttribute(_responsiveImageStyle(attribute.value ?? ''))}"',
+          );
+        } else if (attribute.value == null) {
+          parts.add(attribute.rawName);
+        } else {
+          parts.add(
+            '${attribute.rawName}="${_escapeHtmlAttribute(attribute.value!)}"',
+          );
         }
-        final parts = <String>[];
-        var hasStyle = false;
-        for (final entry in parsed.entries) {
-          final name = entry.key;
-          final attribute = entry.value;
-          if (name == 'src') {
-            parts.add(
-              'src="${_escapeHtmlAttribute(_pictureUrl('ShowPictureQ', sourceValue))}"',
-            );
-          } else if (name == 'width' || name == 'height') {
-            continue;
-          } else if (name == 'style') {
-            hasStyle = true;
-            parts.add(
-              'style="${_escapeHtmlAttribute(_responsiveImageStyle(attribute.value ?? ''))}"',
-            );
-          } else if (attribute.value == null) {
-            parts.add(attribute.rawName);
-          } else {
-            parts.add(
-              '${attribute.rawName}="${_escapeHtmlAttribute(attribute.value!)}"',
-            );
-          }
-        }
-        if (!hasStyle) {
-          parts.add('style="max-width:100%;height:auto"');
-        }
-        return '<img ${parts.join(' ')}>';
-      },
-    );
+      }
+      if (!hasStyle) {
+        parts.add(
+          'style="max-width:100%;height:auto;${_escapeHtmlAttribute(_imageBackingStyle())}"',
+        );
+      }
+      return '<img ${parts.join(' ')}>';
+    });
   }
 
   Map<String, _HtmlAttribute> _parseAttributes(String attributes) {
@@ -421,8 +550,11 @@ class FipiQuestionHtmlBuilder {
   String _responsiveImageStyle(String value) {
     final trimmed = value.trim();
     final separator = trimmed.isEmpty || trimmed.endsWith(';') ? '' : ';';
-    return '$trimmed$separator max-width:100%;height:auto';
+    return '$trimmed$separator max-width:100%;height:auto;${_imageBackingStyle()}';
   }
+
+  String _imageBackingStyle() =>
+      'background:#fff!important;background-color:#fff!important';
 
   String _escapeHtmlAttribute(String value) {
     return const HtmlEscape(HtmlEscapeMode.attribute).convert(value);

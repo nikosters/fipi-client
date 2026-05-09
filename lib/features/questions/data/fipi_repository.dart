@@ -129,18 +129,18 @@ class FipiRepository {
   Future<CheckAnswerResult> checkAnswer({
     required String subjectId,
     required String questionGuid,
-    required Map<String, String> formFields,
+    required Iterable<MapEntry<String, String>> formFields,
   }) async {
     Future<String> send() async {
       await _http.getHtml(FipiEndpoints.questions, {
         'proj': subjectId,
         'init_filter_themes': '1',
       });
-      return _http.postForm(FipiEndpoints.solve, {
+      return _http.postFormEntries(FipiEndpoints.solve, [
         ...formFields,
-        'guid': questionGuid,
-        'proj': subjectId,
-      });
+        MapEntry('guid', questionGuid),
+        MapEntry('proj', subjectId),
+      ]);
     }
 
     var response = await send();
@@ -209,7 +209,13 @@ class FipiRepository {
     return sha1
         .convert(
           utf8.encode(
-            jsonEncode([filter.subjectId, topics, kinds, filter.showSolved]),
+            jsonEncode([
+              filter.subjectId,
+              topics,
+              kinds,
+              filter.showSolved,
+              filter.questionCount,
+            ]),
           ),
         )
         .toString();

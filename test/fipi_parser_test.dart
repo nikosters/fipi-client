@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:windows1251/windows1251.dart';
 
+import 'package:fipi_client/core/storage/app_database.dart';
+import 'package:fipi_client/features/questions/data/answer_form_fields.dart';
 import 'package:fipi_client/features/questions/data/fipi_html_parser.dart';
 import 'package:fipi_client/features/questions/data/fipi_repository.dart';
 import 'package:fipi_client/features/questions/domain/question_models.dart';
@@ -106,7 +108,87 @@ void main() {
     expect(fields['qkind'], 'ILI_STD_SHORT');
     expect(fields['solved'], '0:a,b');
     expect(fields['page'], '2');
+    expect(fields['pagesize'], '10');
     expect(FipiRepository.hashFilter(filter), isNotEmpty);
+  });
+
+  test('QuestionFilter defaults questionCount to 10', () {
+    const filter = QuestionFilter(
+      subjectId: 'physics',
+      topicCodes: {},
+      answerKinds: {},
+      showSolved: false,
+    );
+
+    expect(filter.questionCount, 10);
+  });
+
+  test('builds question fields with requested page size', () {
+    const filter = QuestionFilter(
+      subjectId: 'physics',
+      topicCodes: {},
+      answerKinds: {},
+      showSolved: false,
+    );
+    final fields = FipiRepository.buildQuestionFields(
+      subjectId: 'physics',
+      filter: filter,
+      page: 0,
+      pageSize: 20,
+    );
+
+    expect(fields['pagesize'], '20');
+  });
+
+  test('filter hash includes questionCount', () {
+    const first = QuestionFilter(
+      subjectId: 'physics',
+      topicCodes: {'1'},
+      answerKinds: {AnswerKind.short},
+      showSolved: false,
+      questionCount: 10,
+    );
+    const second = QuestionFilter(
+      subjectId: 'physics',
+      topicCodes: {'1'},
+      answerKinds: {AnswerKind.short},
+      showSolved: false,
+      questionCount: 20,
+    );
+
+    expect(
+      FipiRepository.hashFilter(first),
+      isNot(FipiRepository.hashFilter(second)),
+    );
+  });
+
+  test('reads legacy topic selection payload with default questionCount', () {
+    final payload = AppDatabase.parseTopicSelectionPayload('["1","1.1"]');
+
+    expect(payload.topicCodes, {'1', '1.1'});
+    expect(payload.questionCount, 10);
+  });
+
+  test('reads versioned topic selection payload with questionCount', () {
+    final payload = AppDatabase.parseTopicSelectionPayload(
+      '{"topicCodes":["1","1.1"],"questionCount":20}',
+    );
+
+    expect(payload.topicCodes, {'1', '1.1'});
+    expect(payload.questionCount, 20);
+  });
+
+  test('flattens answer payload preserving repeated fields', () {
+    final fields = flattenAnswerPayload({
+      'answer': ['1', '3'],
+      'comment': 'x',
+    });
+
+    expect(fields.map((field) => '${field.key}:${field.value}'), [
+      'answer:1',
+      'answer:3',
+      'comment:x',
+    ]);
   });
 
   test('showSolved=false hides only solved and correct', () {

@@ -16,8 +16,80 @@ void main() {
     expect(html, contains('function ShowPictureQ'));
     expect(html, contains('function normalizeFipiUrl'));
     expect(html, contains('tr[bgcolor="#FFFFFF"]'));
+    expect(html, contains('background: #ffffff !important'));
+    expect(html, contains('background-color: #ffffff !important'));
     expect(html, isNot(contains('tui')));
     expect(html, isNot(contains('тёмн')));
+  });
+
+  test('normalizes runtime images with white backing', () {
+    final html = builder.build('<div class="qblock"></div>');
+
+    expect(
+      html,
+      contains("img.style.setProperty('background', '#fff', 'important');"),
+    );
+    expect(
+      html,
+      contains(
+        "img.style.setProperty('background-color', '#fff', 'important');",
+      ),
+    );
+    expect(
+      html,
+      contains(
+        'style="background:#fff!important;background-color:#fff!important"',
+      ),
+    );
+  });
+
+  test('collects repeated answer fields as arrays', () {
+    final html = builder.build('<form></form>');
+
+    expect(html, contains('function addField'));
+    expect(html, contains('data[name].push'));
+    expect(html, contains("field.type === 'select-multiple'"));
+    expect(html, contains('function formFor'));
+    expect(html, contains('window.FipiSendAnswer'));
+    expect(html, contains('setTimeout(function ()'));
+    expect(html, contains('}, 120);'));
+    expect(html, contains("field.dispatchEvent(new Event('change'"));
+    expect(html, contains("target.closest('form')"));
+    expect(html, contains("document.addEventListener('click'"));
+    expect(
+      html,
+      contains('input[type="checkbox"], input[type="radio"], select, option'),
+    );
+  });
+
+  test('keeps option marker and closing parenthesis together', () {
+    final html = builder.build('<div class="qblock">1) Текст ответа</div>');
+
+    expect(html, contains('.fipi-choice-marker-cell'));
+    expect(html, contains('white-space: nowrap !important'));
+    expect(html, contains('word-break: keep-all !important'));
+    expect(html, contains('hyphens: none !important'));
+    expect(html, contains('max-width: 2.2em !important'));
+    expect(
+      html,
+      contains(
+        '.qblock td:not(.fipi-answer-cell):not(.fipi-choice-marker-cell):not(.fipi-choice-control-cell)',
+      ),
+    );
+    expect(html, contains('function normalizeOptionNumbers'));
+    expect(html, contains('function compactOptionMarkerText'));
+    expect(html, contains("replace(/[ \\t\\r\\n]+/g, '')"));
+    expect(html, contains('element.textContent = marker'));
+    expect(html, contains('input[type="checkbox"], input[type="radio"]'));
+    expect(html, contains("input.closest && input.closest('tr')"));
+    expect(html, contains('fipi-choice-control-cell'));
+    expect(html, contains('fipi-choice-marker-cell'));
+    expect(html, contains('fipi-choice-text-cell'));
+    expect(html, contains('.fipi-choice-marker-cell br'));
+    expect(html, contains('.fipi-option-marker br'));
+    expect(html, contains('display: none !important'));
+    expect(html, contains('part.replace'));
+    expect(html, contains('node.classList.add'));
   });
 
   test('inlines ShowPictureQ docs image as FIPI root image', () {
@@ -152,7 +224,12 @@ void main() {
     );
 
     expect(html, contains('src="https://ege.fipi.ru/docs/x.png"'));
-    expect(html, contains('style="max-width:100%;height:auto"'));
+    expect(
+      html,
+      contains(
+        'style="max-width:100%;height:auto;background:#fff!important;background-color:#fff!important"',
+      ),
+    );
     expect(html, isNot(contains('width="600"')));
     expect(html, isNot(contains('height="400"')));
   });

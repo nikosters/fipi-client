@@ -50,23 +50,27 @@ class QuestionFilter {
     required this.topicCodes,
     required this.answerKinds,
     required this.showSolved,
+    this.questionCount = 10,
   });
 
   final String subjectId;
   final Set<String> topicCodes;
   final Set<AnswerKind> answerKinds;
   final bool showSolved;
+  final int questionCount;
 
   QuestionFilter copyWith({
     Set<String>? topicCodes,
     Set<AnswerKind>? answerKinds,
     bool? showSolved,
+    int? questionCount,
   }) {
     return QuestionFilter(
       subjectId: subjectId,
       topicCodes: topicCodes ?? this.topicCodes,
       answerKinds: answerKinds ?? this.answerKinds,
       showSolved: showSolved ?? this.showSolved,
+      questionCount: questionCount ?? this.questionCount,
     );
   }
 }

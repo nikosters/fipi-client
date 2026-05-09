@@ -151,8 +151,15 @@ class AppDatabase extends _$AppDatabase {
     String subjectId,
     String guid,
     QuestionStatus status,
-  ) {
-    return into(solvedQuestions).insertOnConflictUpdate(
+  ) async {
+    final current = await (select(
+      solvedQuestions,
+    )..where((tbl) => tbl.guid.equals(guid))).getSingleOrNull();
+    if (current != null) {
+      final currentStatus = QuestionStatus.values.byName(current.status);
+      if (_statusRank(currentStatus) > _statusRank(status)) return;
+    }
+    await into(solvedQuestions).insertOnConflictUpdate(
       SolvedQuestionsCompanion.insert(
         guid: guid,
         subjectId: subjectId,
@@ -162,21 +169,30 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  int _statusRank(QuestionStatus status) {
+    return switch (status) {
+      QuestionStatus.unsolved => 0,
+      QuestionStatus.wrong => 1,
+      QuestionStatus.solved => 2,
+      QuestionStatus.correct => 3,
+    };
+  }
+
   Future<QuestionFilter?> loadSelectionFilter(String subjectId) async {
     final row = await (select(
       selectionState,
     )..where((tbl) => tbl.subjectId.equals(subjectId))).getSingleOrNull();
     if (row == null) return null;
+    final topicPayload = parseTopicSelectionPayload(row.topicCodesJson);
     return QuestionFilter(
       subjectId: subjectId,
-      topicCodes: (jsonDecode(row.topicCodesJson) as List)
-          .cast<String>()
-          .toSet(),
+      topicCodes: topicPayload.topicCodes,
       answerKinds: (jsonDecode(row.answerKindsJson) as List)
           .cast<String>()
           .map((name) => AnswerKind.values.byName(name))
           .toSet(),
       showSolved: row.showSolved,
+      questionCount: topicPayload.questionCount,
     );
   }
 
@@ -184,7 +200,10 @@ class AppDatabase extends _$AppDatabase {
     return into(selectionState).insertOnConflictUpdate(
       SelectionStateCompanion.insert(
         subjectId: filter.subjectId,
-        topicCodesJson: jsonEncode(filter.topicCodes.toList()..sort()),
+        topicCodesJson: jsonEncode({
+          'topicCodes': filter.topicCodes.toList()..sort(),
+          'questionCount': filter.questionCount,
+        }),
         answerKindsJson: jsonEncode(
           filter.answerKinds.map((kind) => kind.name).toList()..sort(),
         ),
@@ -192,5 +211,29 @@ class AppDatabase extends _$AppDatabase {
         updatedAt: DateTime.now(),
       ),
     );
+  }
+
+  static ({Set<String> topicCodes, int questionCount})
+  parseTopicSelectionPayload(String value) {
+    final decoded = jsonDecode(value);
+    if (decoded is List) {
+      return (topicCodes: decoded.cast<String>().toSet(), questionCount: 10);
+    }
+    if (decoded is Map) {
+      final rawTopicCodes = decoded['topicCodes'];
+      final rawQuestionCount = decoded['questionCount'];
+      final questionCount =
+          rawQuestionCount is int &&
+              const {5, 10, 15, 20, 30, 50}.contains(rawQuestionCount)
+          ? rawQuestionCount
+          : 10;
+      return (
+        topicCodes: rawTopicCodes is List
+            ? rawTopicCodes.map((code) => '$code').toSet()
+            : <String>{},
+        questionCount: questionCount,
+      );
+    }
+    return (topicCodes: <String>{}, questionCount: 10);
   }
 }

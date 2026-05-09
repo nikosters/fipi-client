@@ -64,6 +64,20 @@ class FipiHttpClient {
     return _decode(response.data);
   }
 
+  Future<String> postFormEntries(
+    String path,
+    Iterable<MapEntry<String, String>> fields,
+  ) async {
+    final formData = FormData();
+    formData.fields.addAll(fields);
+    final response = await _dio.post<List<int>>(
+      path,
+      data: formData,
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
+    return _decode(response.data);
+  }
+
   Future<String> postMultipart(String path, Map<String, String> fields) async {
     final response = await _dio.post<List<int>>(
       path,
